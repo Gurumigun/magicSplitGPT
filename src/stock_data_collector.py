@@ -133,9 +133,9 @@ class StockDataCollector:
         self.current_stock_screenshot_dir.mkdir(exist_ok=True)
         logger.info(f"주식별 스크린샷 폴더 생성: {self.current_stock_screenshot_dir}")
     
-    def _take_full_page_screenshot_cdp(self, filepath: str) -> bool:
+    def _take_basic_screenshot(self, filepath: str) -> bool:
         """
-        Chrome DevTools Protocol을 사용해서 전체 페이지 스크린샷 캡처
+        기본 스크린샷 캡처 방식
         
         Args:
             filepath: 저장할 파일 경로
@@ -144,34 +144,12 @@ class StockDataCollector:
             스크린샷 성공 여부
         """
         try:
-            # 페이지 레이아웃 메트릭 가져오기
-            page_rect = self.driver.execute_cdp_cmd('Page.getLayoutMetrics', {})
-            
-            # 스크린샷 설정
-            screenshot_config = {
-                'captureBeyondViewport': True,
-                'fromSurface': True,
-                'clip': {
-                    'width': page_rect['contentSize']['width'],
-                    'height': page_rect['contentSize']['height'],
-                    'x': 0,
-                    'y': 0,
-                    'scale': 1
-                }
-            }
-            
-            # 스크린샷 캡처
-            base_64_png = self.driver.execute_cdp_cmd('Page.captureScreenshot', screenshot_config)
-            
-            # 이미지 파일로 저장
-            with open(filepath, "wb") as fh:
-                fh.write(base64.urlsafe_b64decode(base_64_png['data']))
-            
-            logger.info(f"CDP 전체 페이지 스크린샷 저장 완료: {filepath}")
+            self.driver.save_screenshot(filepath)
+            logger.info(f"기본 스크린샷 저장 완료: {filepath}")
             return True
             
         except Exception as e:
-            logger.error(f"CDP 스크린샷 실패: {e}")
+            logger.error(f"기본 스크린샷 실패: {e}")
             return False
     
     def _navigate_to_stock(self, stock_code: str) -> bool:
@@ -584,7 +562,7 @@ class StockDataCollector:
         self._close_driver()
     
     def _capture_company_analysis(self, stock_code: str) -> Dict[str, str]:
-        """종목분석 페이지 iframe 내용 캡처 (coinfo.naver)"""
+        """종목분석 페이지 스크롤 캡처 (coinfo.naver)"""
         analysis_screenshots = {}
         
         try:
@@ -594,65 +572,45 @@ class StockDataCollector:
             self.driver.get(analysis_url)
             time.sleep(5)
             
-            # iframe 찾아서 전환
-            try:
-                iframe_xpath = "/html/body/div[3]/div[2]/div[2]/div[1]/div[3]/iframe"
-                iframe = self.driver.find_element(By.XPATH, iframe_xpath)
-                self.driver.switch_to.frame(iframe)
-                logger.info("종목분석 iframe으로 전환 완료")
-                
-                # iframe 내부 전체 높이 계산
-                iframe_height = self.driver.execute_script("return Math.max("
-                    "document.body.scrollHeight, document.body.offsetHeight, "
-                    "document.documentElement.clientHeight, document.documentElement.scrollHeight, "
-                    "document.documentElement.offsetHeight);")
-                
-                # 메인 창으로 돌아가서 iframe 크기 조정 후 캡처
-                self.driver.switch_to.default_content()
-                
-                # iframe 스타일 조정으로 전체 내용 표시
-                self.driver.execute_script(f"""
-                    var iframe = document.evaluate('{iframe_xpath}', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    if (iframe) {{
-                        iframe.style.height = '{iframe_height}px';
-                        iframe.style.width = '100%';
-                        iframe.style.border = 'none';
-                        iframe.style.overflow = 'visible';
-                    }}
-                """)
-                time.sleep(3)
-                
-                # Chrome DevTools Protocol로 전체 페이지 스크린샷 캡처
+            # 페이지 처음으로 스크롤
+            self.driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(2)
+            
+            # 전체 페이지 높이 계산
+            total_height = self.driver.execute_script("return document.body.scrollHeight")
+            viewport_height = self.driver.execute_script("return window.innerHeight")
+            
+            # 스크린샷 번호
+            screenshot_count = 1
+            current_position = 0
+            
+            # 스크롤하면서 캡처
+            while current_position < total_height:
+                # 현재 위치에서 스크린샷 캡처
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"{stock_code}_company_analysis_cdp_full_{timestamp}.{self.config.screenshot.format}"
+                filename = f"{stock_code}_company_analysis_{screenshot_count:02d}_{timestamp}.{self.config.screenshot.format}"
                 filepath = self.current_stock_screenshot_dir / filename
                 
-                success = self._take_full_page_screenshot_cdp(str(filepath))
+                success = self._take_basic_screenshot(str(filepath))
                 if success:
-                    analysis_screenshots["cdp_screenshot"] = str(filepath)
-                    logger.info(f"종목분석 CDP 전체 캡처 완료: {filename}")
-                else:
-                    # CDP 실패 시 기존 방식으로 폴백
-                    self.driver.save_screenshot(str(filepath))
-                    analysis_screenshots["fallback_screenshot"] = str(filepath)
-                    logger.info(f"종목분석 폴백 스크린샷 완료: {filename}")
+                    analysis_screenshots[f"analysis_part_{screenshot_count}"] = str(filepath)
+                    logger.info(f"종목분석 스크롤 캡처 완료 ({screenshot_count}/{total_height//viewport_height + 1}): {filename}")
                 
-            except Exception as iframe_error:
-                logger.error(f"iframe 캡처 실패: {iframe_error}")
-                # 일반 페이지 캡처로 폴백
-                total_height = self.driver.execute_script("return document.body.scrollHeight")
-                original_size = self.driver.get_window_size()
-                self.driver.set_window_size(1920, total_height)
-                time.sleep(2)
+                # 다음 스크롤 위치 계산
+                next_position = current_position + viewport_height
+                if next_position >= total_height:
+                    # 마지막 스크롤이면 캡처하지 않고 종료
+                    logger.info("종목분석 마지막 스크롤 도달, 캡처 완료")
+                    break
                 
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"{stock_code}_company_analysis_fallback_{timestamp}.{self.config.screenshot.format}"
-                filepath = self.current_stock_screenshot_dir / filename
-                self.driver.save_screenshot(str(filepath))
+                # 다음 위치로 스크롤
+                self.driver.execute_script(f"window.scrollTo(0, {next_position});")
+                time.sleep(2)  # 스크롤 후 로딩 대기
                 
-                self.driver.set_window_size(original_size['width'], original_size['height'])
-                analysis_screenshots["fallback_screenshot"] = str(filepath)
-                logger.info(f"종목분석 일반 페이지 캡처 완료: {filename}")
+                current_position = next_position
+                screenshot_count += 1
+            
+            logger.info(f"종목분석 스크롤 캡처 완료: 총 {screenshot_count-1}개 스크린샷")
             
         except Exception as e:
             logger.error(f"종목분석 페이지 캡처 실패: {e}")
@@ -670,22 +628,19 @@ class StockDataCollector:
             self.driver.get(news_url)
             time.sleep(3)
             
-            # Chrome DevTools Protocol로 전체 페이지 스크린샷 캡처
+            # 기본 스크린샷 캡처
             self.driver.execute_script("window.scrollTo(0, 0);")
             time.sleep(2)
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{stock_code}_news_cdp_full_{timestamp}.{self.config.screenshot.format}"
+            filename = f"{stock_code}_news_{timestamp}.{self.config.screenshot.format}"
             filepath = self.current_stock_screenshot_dir / filename
             
-            success = self._take_full_page_screenshot_cdp(str(filepath))
-            if not success:
-                # CDP 실패 시 기존 방식으로 폴백
-                logger.warning("뉴스 페이지 CDP 스크린샷 실패, 기존 방식으로 폴백")
-                self.driver.save_screenshot(str(filepath))
-                logger.info(f"뉴스 페이지 폴백 스크린샷 완료: {filename}")
+            success = self._take_basic_screenshot(str(filepath))
+            if success:
+                logger.info(f"뉴스 페이지 스크린샷 완료: {filename}")
             else:
-                logger.info(f"뉴스 페이지 CDP 전체 캡처 완료: {filename}")
+                logger.warning(f"뉴스 페이지 스크린샷 실패: {filename}")
             
             # 뉴스 리스트 수집
             news_items = self.driver.find_elements(By.CSS_SELECTOR, ".tb_cont, .newsList li")
@@ -733,22 +688,19 @@ class StockDataCollector:
             self.driver.get(investor_url)
             time.sleep(3)
             
-            # Chrome DevTools Protocol로 전체 페이지 스크린샷 캡처
+            # 기본 스크린샷 캡처
             self.driver.execute_script("window.scrollTo(0, 0);")
             time.sleep(2)
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{stock_code}_investor_trends_cdp_full_{timestamp}.{self.config.screenshot.format}"
+            filename = f"{stock_code}_investor_trends_{timestamp}.{self.config.screenshot.format}"
             filepath = self.current_stock_screenshot_dir / filename
             
-            success = self._take_full_page_screenshot_cdp(str(filepath))
-            if not success:
-                # CDP 실패 시 기존 방식으로 폴백
-                logger.warning("투자자별 매매동향 페이지 CDP 스크린샷 실패, 기존 방식으로 폴백")
-                self.driver.save_screenshot(str(filepath))
-                logger.info(f"투자자별 매매동향 페이지 폴백 스크린샷 완료: {filename}")
+            success = self._take_basic_screenshot(str(filepath))
+            if success:
+                logger.info(f"투자자별 매매동향 페이지 스크린샷 완료: {filename}")
             else:
-                logger.info(f"투자자별 매매동향 페이지 CDP 전체 캡처 완료: {filename}")
+                logger.warning(f"투자자별 매매동향 페이지 스크린샷 실패: {filename}")
             
             # 투자자별 매매 데이터 테이블 수집
             try:
@@ -851,7 +803,10 @@ class StockDataCollector:
                     result = self.driver.execute_script(click_script)
                     if result:
                         logger.info(f"{korean_name} 차트 클릭 성공")
-                        time.sleep(5)  # 차트 변경 대기
+                        if chart_type == "month":
+                            time.sleep(7)  # 월봉은 2초 추가 딜레이 (총 7초)
+                        else:
+                            time.sleep(5)  # 차트 변경 대기
                     else:
                         logger.warning(f"{korean_name} 차트 요소를 찾을 수 없음")
                         continue
@@ -883,7 +838,45 @@ class StockDataCollector:
             
             # 1시간봉 차트 캡처
             try:
-                # JavaScript로 1시간봉 클릭
+                # 먼저 분봉 클릭
+                minute_click_script = """
+                const targetItem = document.querySelector('[stxtap="rangeSetMin()"]');
+                if (targetItem) {
+                    // 클릭할 위치를 계산합니다.
+                    const rect = targetItem.getBoundingClientRect();
+                    
+                    // Pointer 이벤트에 필요한 상세 옵션을 정의합니다.
+                    const eventOptions = {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        pointerId: 1,      // 포인터의 고유 ID
+                        button: 0,         // 마우스 왼쪽 버튼
+                        clientX: rect.left + rect.width / 2,
+                        clientY: rect.top + rect.height / 2,
+                        isPrimary: true
+                    };
+                
+                    // pointerdown과 pointerup 이벤트를 순서대로 발생시킵니다.
+                    targetItem.dispatchEvent(new PointerEvent('pointerdown', eventOptions));
+                    targetItem.dispatchEvent(new PointerEvent('pointerup', eventOptions));
+                
+                    console.log("✅ '분봉' 항목이 클릭되었습니다.");
+                    return true;
+                } else {
+                    console.error("❌ 실패: '분봉' 항목을 찾지 못했습니다.");
+                    return false;
+                }
+                """
+                
+                minute_result = self.driver.execute_script(minute_click_script)
+                if minute_result:
+                    logger.info("분봉 클릭 성공")
+                    time.sleep(2)  # 분봉 클릭 후 대기
+                else:
+                    logger.warning("분봉 요소를 찾을 수 없음")
+                
+                # 이제 1시간봉 클릭
                 hour_click_script = """
                 const targetItem = document.querySelector('cq-item[interval="60"]');
                 if (targetItem) {

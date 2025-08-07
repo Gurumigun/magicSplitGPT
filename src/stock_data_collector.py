@@ -119,16 +119,25 @@ class StockDataCollector:
             except Exception as e:
                 logger.error(f"드라이버 종료 실패: {e}")
     
-    def _setup_stock_screenshot_folder(self, stock_code: str) -> None:
+    def _setup_stock_screenshot_folder(self, stock_code: str, stock_name: str = None) -> None:
         """
         주식별 스크린샷 폴더 생성
         
         Args:
             stock_code: 주식 코드
+            stock_name: 주식 이름 (선택사항)
         """
         # 현재 시간으로 폴더명 생성 (YYMMDDHHmm 형식)
         timestamp = datetime.now().strftime("%y%m%d%H%M")
-        folder_name = f"{stock_code}_{timestamp}"
+        
+        # 주식 이름이 있으면 폴더명에 포함 (특수문자 제거)
+        if stock_name:
+            # 파일명에 사용할 수 없는 문자 제거
+            clean_stock_name = "".join(c for c in stock_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            clean_stock_name = clean_stock_name.replace(' ', '_')
+            folder_name = f"{stock_code}_{clean_stock_name}_{timestamp}"
+        else:
+            folder_name = f"{stock_code}_{timestamp}"
         
         # 주식별 폴더 경로 설정
         self.current_stock_screenshot_dir = self.base_screenshot_dir / folder_name
@@ -505,9 +514,6 @@ class StockDataCollector:
         try:
             logger.info(f"주식 데이터 수집 시작: {stock_code}")
             
-            # 주식별 스크린샷 폴더 생성
-            self._setup_stock_screenshot_folder(stock_code)
-            
             # 드라이버 설정
             self._setup_driver()
             
@@ -517,6 +523,10 @@ class StockDataCollector:
             
             # 1. 기본 종목 페이지에서 기본 정보 수집
             basic_info = self._get_basic_info()
+            
+            # 주식 이름을 가져온 후 스크린샷 폴더 생성
+            stock_name = basic_info.get("stock_name", "")
+            self._setup_stock_screenshot_folder(stock_code, stock_name)
             
             # 2. 종목분석 페이지 (coinfo.naver) - 스크롤링 캡처
             analysis_screenshots = self._capture_company_analysis(stock_code)

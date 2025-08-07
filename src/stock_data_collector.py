@@ -100,6 +100,10 @@ class StockDataCollector:
             self.driver.implicitly_wait(self.config.webdriver.implicit_wait)
             self.wait = WebDriverWait(self.driver, self.config.webdriver.wait_timeout)
             
+            # 브라우저 줌 레벨을 60%로 설정
+            self.driver.execute_script("document.body.style.zoom='0.6'")
+            logger.info("브라우저 줌 레벨 60% 설정 완료")
+            
             logger.info("Chrome 드라이버 설정 완료")
             
         except Exception as e:
@@ -168,28 +172,31 @@ class StockDataCollector:
             
             self.driver.get(stock_url)
             
-            # 페이지 로딩 대기 - 여러 선택자로 시도
-            selectors_to_try = [
-                (By.CLASS_NAME, "chart_area"),
-                (By.ID, "chart"),
-                (By.CLASS_NAME, "graph_wrap"),
-                (By.CLASS_NAME, "today"),
-                (By.TAG_NAME, "body")  # 최후의 수단
-            ]
+            # # 페이지 로딩 대기 - 여러 선택자로 시도
+            # selectors_to_try = [
+            #     (By.CLASS_NAME, "chart_area"),
+            #     (By.ID, "chart"),
+            #     (By.CLASS_NAME, "graph_wrap"),
+            #     (By.CLASS_NAME, "today"),
+            #     (By.TAG_NAME, "body")  # 최후의 수단
+            # ]
             
-            loaded = False
-            for by, selector in selectors_to_try:
-                try:
-                    self.wait.until(EC.presence_of_element_located((by, selector)))
-                    logger.info(f"페이지 로딩 완료: {selector} 선택자로 확인")
-                    loaded = True
-                    break
-                except TimeoutException:
-                    logger.debug(f"선택자 {selector} 로딩 실패, 다음 시도")
-                    continue
+            # loaded = False
+            # for by, selector in selectors_to_try:
+            #     try:
+            #         self.wait.until(EC.presence_of_element_located((by, selector)))
+            #         logger.info(f"페이지 로딩 완료: {selector} 선택자로 확인")
+            #         loaded = True
+            #         break
+            #     except TimeoutException:
+            #         logger.debug(f"선택자 {selector} 로딩 실패, 다음 시도")
+            #         continue
             
-            if not loaded:
-                logger.warning("모든 선택자 로딩 실패, 기본 대기 시간으로 진행")
+            # if not loaded:
+            #     logger.warning("모든 선택자 로딩 실패, 기본 대기 시간으로 진행")
+            
+            # 페이지 로드 후 브라우저 줌 레벨을 60%로 설정
+            self.driver.execute_script("document.body.style.zoom='0.6'")
             
             time.sleep(self.config.naver_finance.delay_between_requests)
             return True
@@ -570,6 +577,10 @@ class StockDataCollector:
             analysis_url = f"https://finance.naver.com/item/coinfo.naver?code={stock_code}"
             logger.info(f"종목분석 페이지 이동: {analysis_url}")
             self.driver.get(analysis_url)
+            
+            # 브라우저 줌 레벨을 60%로 설정
+            self.driver.execute_script("document.body.style.zoom='0.6'")
+            
             time.sleep(5)
             
             # 페이지 처음으로 스크롤
@@ -584,6 +595,9 @@ class StockDataCollector:
             screenshot_count = 1
             current_position = 0
             
+            # 80% 스크롤 높이로 계산
+            scroll_height = int(viewport_height * 0.8)
+            
             # 스크롤하면서 캡처
             while current_position < total_height:
                 # 현재 위치에서 스크린샷 캡처
@@ -594,10 +608,10 @@ class StockDataCollector:
                 success = self._take_basic_screenshot(str(filepath))
                 if success:
                     analysis_screenshots[f"analysis_part_{screenshot_count}"] = str(filepath)
-                    logger.info(f"종목분석 스크롤 캡처 완료 ({screenshot_count}/{total_height//viewport_height + 1}): {filename}")
+                    logger.info(f"종목분석 스크롤 캡처 완료 ({screenshot_count}/{total_height//scroll_height + 1}): {filename}")
                 
-                # 다음 스크롤 위치 계산
-                next_position = current_position + viewport_height
+                # 다음 스크롤 위치 계산 (창 높이의 80%로 스크롤)
+                next_position = current_position + scroll_height
                 if next_position >= total_height:
                     # 마지막 스크롤이면 캡처하지 않고 종료
                     logger.info("종목분석 마지막 스크롤 도달, 캡처 완료")
@@ -626,6 +640,10 @@ class StockDataCollector:
             news_url = f"https://finance.naver.com/item/news.naver?code={stock_code}"
             logger.info(f"뉴스공시 페이지 이동: {news_url}")
             self.driver.get(news_url)
+            
+            # 브라우저 줌 레벨을 60%로 설정
+            self.driver.execute_script("document.body.style.zoom='0.6'")
+            
             time.sleep(3)
             
             # 기본 스크린샷 캡처
@@ -686,6 +704,10 @@ class StockDataCollector:
             investor_url = f"https://finance.naver.com/item/frgn.naver?code={stock_code}"
             logger.info(f"투자자별 매매동향 페이지 이동: {investor_url}")
             self.driver.get(investor_url)
+            
+            # 브라우저 줌 레벨을 60%로 설정
+            self.driver.execute_script("document.body.style.zoom='0.6'")
+            
             time.sleep(3)
             
             # 기본 스크린샷 캡처
@@ -739,6 +761,10 @@ class StockDataCollector:
             chart_url = f"https://finance.naver.com/item/fchart.naver?code={stock_code}"
             logger.info(f"전문 차트 페이지 이동: {chart_url}")
             self.driver.get(chart_url)
+            
+            # 브라우저 줌 레벨을 60%로 설정
+            self.driver.execute_script("document.body.style.zoom='0.6'")
+            
             time.sleep(10)  # 차트 로딩 대기
             
             # 차트 지표 설정 (MACD, RSI, Stochastic)
@@ -777,7 +803,16 @@ class StockDataCollector:
             
             for chart_type, css_class, korean_name in chart_types:
                 try:
-                    # JavaScript로 차트 타입 클릭
+                    # 1. 먼저 차트 탭 클릭
+                    try:
+                        chart_tab = self.driver.find_element(By.XPATH, "//a[contains(text(),'차트') or @href*='fchart']")
+                        self.driver.execute_script("arguments[0].click();", chart_tab)
+                        time.sleep(2)
+                        logger.info("차트 탭 클릭 완료")
+                    except Exception as tab_error:
+                        logger.warning(f"차트 탭 클릭 실패 (계속 진행): {tab_error}")
+                    
+                    # 2. JavaScript로 차트 타입 클릭
                     click_script = f"""
                     const targetDiv = document.querySelector('div.{css_class}:not(.selected)');
                     if (targetDiv) {{
@@ -811,26 +846,39 @@ class StockDataCollector:
                         logger.warning(f"{korean_name} 차트 요소를 찾을 수 없음")
                         continue
                     
-                    # 차트 영역만 캡처 (기존 방식 유지)
+                    # 3. 차트 영역 캡처 (class="section section_chart inner_sub" 우선)
                     try:
-                        chart_area = self.driver.find_element(By.CSS_SELECTOR, "cq-context, .chart_area, #chart")
+                        # 먼저 section section_chart inner_sub 영역 시도
+                        chart_area = self.driver.find_element(By.CSS_SELECTOR, ".section.section_chart.inner_sub")
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         filename = f"{stock_code}_chart_{chart_type}_{timestamp}.{self.config.screenshot.format}"
                         filepath = self.current_stock_screenshot_dir / filename
                         
                         chart_area.screenshot(str(filepath))
                         chart_screenshots[f"chart_{chart_type}"] = str(filepath)
-                        logger.info(f"{korean_name} 차트 캡처 완료: {filename}")
+                        logger.info(f"{korean_name} 차트 캡처 완료 (section_chart): {filename}")
                         
-                    except Exception as area_error:
-                        # 전체 페이지 캡처로 폴백
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"{stock_code}_chart_{chart_type}_full_{timestamp}.{self.config.screenshot.format}"
-                        filepath = self.current_stock_screenshot_dir / filename
-                        
-                        self.driver.save_screenshot(str(filepath))
-                        chart_screenshots[f"chart_{chart_type}_full"] = str(filepath)
-                        logger.info(f"{korean_name} 차트 전체 페이지 캡처 완료: {filename}")
+                    except Exception as section_error:
+                        # section_chart 영역이 없으면 기존 선택자 시도
+                        try:
+                            chart_area = self.driver.find_element(By.CSS_SELECTOR, "cq-context, .chart_area, #chart")
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            filename = f"{stock_code}_chart_{chart_type}_{timestamp}.{self.config.screenshot.format}"
+                            filepath = self.current_stock_screenshot_dir / filename
+                            
+                            chart_area.screenshot(str(filepath))
+                            chart_screenshots[f"chart_{chart_type}"] = str(filepath)
+                            logger.info(f"{korean_name} 차트 캡처 완료 (fallback): {filename}")
+                            
+                        except Exception as area_error:
+                            # 전체 페이지 캡처로 폴백
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            filename = f"{stock_code}_chart_{chart_type}_full_{timestamp}.{self.config.screenshot.format}"
+                            filepath = self.current_stock_screenshot_dir / filename
+                            
+                            self.driver.save_screenshot(str(filepath))
+                            chart_screenshots[f"chart_{chart_type}_full"] = str(filepath)
+                            logger.info(f"{korean_name} 차트 전체 페이지 캡처 완료: {filename}")
                     
                 except Exception as chart_error:
                     logger.error(f"{korean_name} 차트 캡처 실패: {chart_error}")
@@ -838,7 +886,16 @@ class StockDataCollector:
             
             # 1시간봉 차트 캡처
             try:
-                # 먼저 분봉 클릭
+                # 1. 먼저 차트 탭 클릭
+                try:
+                    chart_tab = self.driver.find_element(By.XPATH, "//a[contains(text(),'차트') or @href*='fchart']")
+                    self.driver.execute_script("arguments[0].click();", chart_tab)
+                    time.sleep(2)
+                    logger.info("1시간봉 캡처를 위한 차트 탭 클릭 완료")
+                except Exception as tab_error:
+                    logger.warning(f"차트 탭 클릭 실패 (계속 진행): {tab_error}")
+                
+                # 2. 먼저 분봉 클릭
                 minute_click_script = """
                 const targetItem = document.querySelector('[stxtap="rangeSetMin()"]');
                 if (targetItem) {
@@ -907,28 +964,41 @@ class StockDataCollector:
                     logger.warning("1시간봉 차트 요소를 찾을 수 없음")
                     raise Exception("1시간봉 요소 찾기 실패")
                 
-                # 1시간봉 차트 대기시간 증가 후 캡처 (기존 방식 유지)
+                # 1시간봉 차트 대기시간 증가 후 캡처 (class="section section_chart inner_sub" 우선)
                 time.sleep(3)  # 추가 대기시간 (총 8초)
                 
                 try:
-                    chart_area = self.driver.find_element(By.CSS_SELECTOR, "cq-context, .chart_area, #chart")
+                    # 먼저 section section_chart inner_sub 영역 시도
+                    chart_area = self.driver.find_element(By.CSS_SELECTOR, ".section.section_chart.inner_sub")
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     filename = f"{stock_code}_chart_1hour_{timestamp}.{self.config.screenshot.format}"
                     filepath = self.current_stock_screenshot_dir / filename
                     
                     chart_area.screenshot(str(filepath))
                     chart_screenshots["chart_1hour"] = str(filepath)
-                    logger.info(f"1시간봉 차트 캡처 완료: {filename}")
+                    logger.info(f"1시간봉 차트 캡처 완료 (section_chart): {filename}")
                     
-                except Exception as area_error:
-                    # 전체 페이지 캡처로 폴백
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"{stock_code}_chart_1hour_full_{timestamp}.{self.config.screenshot.format}"
-                    filepath = self.current_stock_screenshot_dir / filename
-                    
-                    self.driver.save_screenshot(str(filepath))
-                    chart_screenshots["chart_1hour_full"] = str(filepath)
-                    logger.info(f"1시간봉 차트 전체 페이지 캡처 완료: {filename}")
+                except Exception as section_error:
+                    # section_chart 영역이 없으면 기존 선택자 시도
+                    try:
+                        chart_area = self.driver.find_element(By.CSS_SELECTOR, "cq-context, .chart_area, #chart")
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"{stock_code}_chart_1hour_{timestamp}.{self.config.screenshot.format}"
+                        filepath = self.current_stock_screenshot_dir / filename
+                        
+                        chart_area.screenshot(str(filepath))
+                        chart_screenshots["chart_1hour"] = str(filepath)
+                        logger.info(f"1시간봉 차트 캡처 완료 (fallback): {filename}")
+                        
+                    except Exception as area_error:
+                        # 전체 페이지 캡처로 폴백
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"{stock_code}_chart_1hour_full_{timestamp}.{self.config.screenshot.format}"
+                        filepath = self.current_stock_screenshot_dir / filename
+                        
+                        self.driver.save_screenshot(str(filepath))
+                        chart_screenshots["chart_1hour_full"] = str(filepath)
+                        logger.info(f"1시간봉 차트 전체 페이지 캡처 완료: {filename}")
                 
             except Exception as hour_error:
                 logger.error(f"1시간봉 차트 캡처 실패: {hour_error}")
